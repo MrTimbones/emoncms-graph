@@ -522,12 +522,12 @@ body { background-color: whitesmoke; }
 		<div class="card-header time-manual-controls" v-show="!histogramMode && showTimeManual" style="background-color: #eee;">
 			<div class="input-prepend input-append my-0">
 				<span class="add-on"><?php echo tr('Start'); ?></span>
-				<date-time-picker v-model="startLocal" @change="onReload"></date-time-picker>
+				<date-time-picker v-model="startLocal" @change="onWindowInputChange"></date-time-picker>
 			</div>
 
 			<div class="input-prepend input-append my-0">
 				<span class="add-on"><?php echo tr('End'); ?></span>
-				<date-time-picker v-model="endLocal" @change="onReload"></date-time-picker>
+				<date-time-picker v-model="endLocal" @change="onWindowInputChange"></date-time-picker>
 			</div>
 
 			<button class="btn my-0" title="<?php echo tr('Done'); ?>" @click="showTimeManual = false"><i class="icon-ok"></i></button>

@@ -35,6 +35,12 @@ const GraphLayoutApp = {
 		hiddenFeedIds: new Set(),
 		startLocal: GH.msToDatetimeLocal(Date.now() - 168 * 3600_000),
 		endLocal:   GH.msToDatetimeLocal(Math.round(Date.now() / 1000) * 1000),
+		// Precise zoom/pan window in ms. The date-time pickers only carry minute
+		// resolution, so we keep the exact range here and prefer it in
+		// getWindowRange — otherwise a sub-minute zoom collapses to a single
+		// minute and the start >= end guard falls back to a ~1 day window.
+		windowStartMs: null,
+		windowEndMs:   null,
 		csvText: '',
 		collapsedTags: {},
 		savedGraphsCollapsed: false,
@@ -363,6 +369,11 @@ const GraphLayoutApp = {
 		},
 
 		getWindowRange() {
+			// Prefer the exact zoom/pan range when present (full ms precision).
+			if (isFinite(this.windowStartMs) && isFinite(this.windowEndMs) &&
+			    this.windowEndMs > this.windowStartMs) {
+				return { startMs: this.windowStartMs, endMs: this.windowEndMs };
+			}
 			const parse = s => Date.parse(s && s.replace(' ', 'T'));
 			const start = parse(this.startLocal);
 			const end   = parse(this.endLocal);
@@ -380,12 +391,22 @@ const GraphLayoutApp = {
 
 		setWindowAndReload(startMs, endMs, floating) {
 			this.state.floatingtime = floating ? 1 : 0;
+			this.windowStartMs = startMs;
+			this.windowEndMs   = endMs;
 			this.calcIntervalForWindow(startMs, endMs);
 			this.syncWindowInputs(startMs, endMs);
 			this.fetchFeedData();
 		},
 
 		onReload()            { const r = this.getWindowRange(); this.setWindowAndReload(r.startMs, r.endMs, false); },
+
+		// Date-time picker edits: drop the precise zoom range so the typed
+		// minute-resolution inputs take effect.
+		onWindowInputChange() {
+			this.windowStartMs = null;
+			this.windowEndMs   = null;
+			this.onReload();
+		},
 
 		onIntervalInputClick() {
 			if (this.state.fixinterval) return;
