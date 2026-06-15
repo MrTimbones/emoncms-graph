@@ -417,6 +417,13 @@ const buildFeedDataParams = (feedlist, startMs, endMs, state) => {
 	const interval = state.mode !== 'interval'
 		? state.mode
 		: (parseInt(state.interval, 10) || 60);
+	// In fixed-interval mode, snap the window to the interval grid so datapoints
+	// align: floor the start and ceil the end to the nearest interval boundary.
+	if (state.mode === 'interval') {
+		const intervalMs = interval * 1000;
+		startMs = Math.floor(startMs / intervalMs) * intervalMs;
+		endMs   = Math.ceil(endMs / intervalMs) * intervalMs;
+	}
 	return new URLSearchParams({
 		ids:           feedlist.map(f => f.id).join(','),
 		start:         String(startMs),
