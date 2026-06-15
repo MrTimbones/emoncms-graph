@@ -125,6 +125,7 @@ const tooltipFormatter = makeDateFormatter({
 	day: 'numeric',
 	hour: '2-digit',
 	minute: '2-digit',
+	second: '2-digit',
 });
 
 const monthNamesShort = Array.from({ length: 12 }, (_, month) =>
