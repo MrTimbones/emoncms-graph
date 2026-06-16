@@ -42,6 +42,14 @@ body {
 .legendLayer rect.background { fill: rgba(255, 255, 255, 0.6); }
 .legend { font-size: 13px; }
 
+/* Keep touch gestures inside the plot so pan/pinch feels stable on mobile. */
+@media (pointer: coarse) {
+	#placeholder {
+		touch-action: none;
+		overscroll-behavior: contain;
+	}
+}
+
 #graph_zoomin, #graph_zoomout, #graph_left, #graph_right { font-weight: 700; }
 </style>
 
