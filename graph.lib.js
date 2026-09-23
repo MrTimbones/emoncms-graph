@@ -155,9 +155,14 @@ const msToDatetimeLocal = ms => {
 
 const toMsFromPlotValue = value => (value < 1e12 ? value * 1000 : value);
 
-const pickIntervalForWindow = (startMs, endMs, minStep) => {
+// The step to read a window at, rounded up to a step on the ladder. The
+// target is how many datapoints the chart wants: the graph page draws one
+// chart the width of the page and asks for 600, a dashboard widget asks for
+// as many as its box is wide.
+const pickIntervalForWindow = (startMs, endMs, minStep, targetPoints = 600) => {
 	const windowSecs  = (endMs - startMs) / 1000;
-	const raw         = windowSecs / 600;
+	const points      = Math.max(1, Number(targetPoints) || 600);
+	const raw         = windowSecs / points;
 	const resolvedMin = isFinite(Number(minStep)) ? Number(minStep) : 10;
 	return (
 		INTERVAL_LADDER.find(step => step >= raw && step >= resolvedMin) ??
@@ -450,6 +455,66 @@ const deriveProcessingParams = state => {
 const suggestHistogramResolution = diff =>
 	diff < 100 ? 0.1 : diff < 5000 ? 10 : 100;
 
+/* ── Series Construction ─────────────────────────────────────────── */
+
+// Flot default palette. Flot 5 starts it at an offset equal to the number of
+// series with a set colour, Flot 0.8 started at the first entry. Colours are
+// assigned here in the 0.8 order so saved graphs keep their colours.
+const AUTO_COLORS = ['#edc240', '#afd8f8', '#cb4b4b', '#4da74d', '#9440ed'];
+
+// One flot series from one feed, given data that is already processed.
+const buildPlotSeries = (feed, data, state, hidden, autoColor) => {
+	const stacked = !!feed.stack;
+	const fillVal = feed.fill ? (stacked ? 1.0 : 0.5) : 0;
+
+	const series = { label: buildFeedLabel(feed, state.showtag), data, yaxis: feed.yaxis || 1, stack: stacked, id: feed.id };
+	if (feed.color) series.color = feed.color;
+	else if (autoColor) series.color = autoColor;
+
+	const PLOT_TYPES = {
+		lines:  () => { series.lines  = { show: !hidden, fill: fillVal, lineWidth: 2 }; },
+		bars:   () => { series.bars   = { show: !hidden, fill: fillVal, align: 'center', barWidth: 0.8 }; },
+		points: () => { series.points = { show: !hidden, radius: 3 }; },
+		steps:  () => { series.lines  = { show: !hidden, fill: fillVal, steps: true }; },
+	};
+	(PLOT_TYPES[feed.plottype] ?? PLOT_TYPES.lines)();
+
+	return series;
+};
+
+// Every series for a window, processing each feed's data on the way. Stats are
+// written back onto the feed, which is where the graph page reads them from.
+const buildPlotData = (feedlist, state, startMs, endMs, hiddenIds) => {
+	const p = deriveProcessingParams(state);
+	const timeInWindowSeconds = (endMs - startMs) / 1000;
+	const hidden = hiddenIds || new Set();
+	let autoIndex = 0;
+
+	return feedlist.map(feed => {
+		let data = Array.isArray(feed.data) ? feed.data.map(pt => [pt[0], pt[1]]) : [];
+
+		const scale  = isFinite(parseFloat(feed.scale))  ? parseFloat(feed.scale)  : 1;
+		const offset = isFinite(parseFloat(feed.offset)) ? parseFloat(feed.offset) : 0;
+
+		// 1. Fill null gaps with last value if enabled.
+		if (p.removeNull && data.length > 1)
+			data = fillShortNullGaps(data, p.intervalSeconds, p.maxDuration);
+
+		// 2. Apply scale/offset to the data for plotting.
+		data = applyScaleOffset(data, scale, offset);
+
+		// 3. Stats use the full processed data so nulls count toward quality
+		feed.stats = calculateFeedStats(data, timeInWindowSeconds);
+
+		// 4. Removes remaining nulls if this option is disabled.
+		if (!state.showmissing)
+			data = data.filter(pt => pt[1] !== null);
+
+		const autoColor = feed.color ? '' : AUTO_COLORS[autoIndex++ % AUTO_COLORS.length];
+		return buildPlotSeries(feed, data, state, hidden.has(feed.id), autoColor);
+	});
+};
+
 /* ── Saved Graph Payload Helpers ─────────────────────────────────────────── */
 
 const normalizeSavedGraphPayload = (graph = {}) => ({
@@ -506,6 +571,8 @@ window.GraphHelpers = {
 	buildFeedDataParams,
 	deriveProcessingParams,
 	suggestHistogramResolution,
+	buildPlotSeries,
+	buildPlotData,
 	formatGraphWindowTime,
 	formatGraphTooltipTime,
 	normalizeSavedGraphPayload,
